@@ -1,35 +1,73 @@
-import { useState } from 'react';
-import { type Node, type Edge } from '@xyflow/react';
-import { Button } from '@/components/ui/button';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { Button } from '../../components/ui/button';
+import { NodeFormProps } from '../../types/workflow.types';
 
-interface NodeFormProps {
-  node?: Node;
-  newNodeConfig?: { type: 'ifelse'; edgeId: string };
-  edges: Edge[];
-  setNodes: (updater: (nodes: Node[]) => Node[]) => void;
-  setEdges: (updater: (edges: Edge[]) => Edge[]) => void;
-  setNeedsLayout: (value: boolean) => void;
-  onClose: () => void;
-  onNewNodeSave?: (data: { label: string; branches: { label: string }[] }) => void;
-}
-
-// Helper function to get all downstream nodes using BFS
-const getDownstreamNodes = (startNodeId: string, edges: Edge[]): string[] => {
-  const visited = new Set<string>();
-  const queue = [startNodeId];
-  while (queue.length > 0) {
-    const currentId = queue.shift()!;
-    if (!visited.has(currentId)) {
-      visited.add(currentId);
-      const outgoingEdges = edges.filter((e) => e.source === currentId);
-      outgoingEdges.forEach((e) => queue.push(e.target));
-    }
-  }
-  return Array.from(visited);
+const styles = {
+  form: {
+    position: 'absolute' as const,
+    right: 0,
+    top: 0,
+    width: 400,
+    padding: 20,
+    background: '#fff',
+    border: '1px solid #ddd',
+    borderRadius: 8,
+    boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+    zIndex: 10,
+  },
+  header: {
+    display: 'flex' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold' as const,
+    margin: 0,
+  },
+  closeButton: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: 0,
+  },
+  field: {
+    marginBottom: 20,
+  },
+  label: {
+    display: 'block',
+    marginBottom: 5,
+    fontWeight: 'bold' as const,
+  },
+  input: {
+    width: '100%',
+    padding: 8,
+    border: '1px solid #ccc',
+    borderRadius: 4,
+    fontSize: 14,
+  },
+  branchItem: {
+    marginBottom: 10,
+  },
+  actions: {
+    display: 'flex' as const,
+    justifyContent: 'flex-end' as const,
+    gap: 10,
+  },
 };
 
-export function NodeForm({ node, newNodeConfig, edges, setNodes, setEdges, setNeedsLayout, onClose, onNewNodeSave }: NodeFormProps) {
+export function NodeForm({
+  node,
+  newNodeConfig,
+  edges,
+  setNodes,
+  setEdges,
+  setNeedsLayout,
+  onClose,
+  onNewNodeSave,
+}: NodeFormProps) {
   const isNewNode = !!newNodeConfig;
   const nodeType = node ? node.type : newNodeConfig?.type;
 
@@ -112,7 +150,7 @@ export function NodeForm({ node, newNodeConfig, edges, setNodes, setEdges, setNe
       } else {
         // Branches go to different nodes or End nodes, create a new End node
         targetId = `end-${Date.now()}`;
-        const newEndNode: Node = {
+        const newEndNode = {
           id: targetId,
           type: 'end',
           position: { x: node.position.x, y: node.position.y + 200 },
@@ -135,7 +173,7 @@ export function NodeForm({ node, newNodeConfig, edges, setNodes, setEdges, setNe
         return [...filteredEdges, newEdge];
       });
 
-      // Step 6: Remove only the If/Else structure, let useEffect handle unreachable nodes
+      // Step 6: Remove only the If/Else structure
       setNodes((nds) => nds.filter((n) => !nodesToRemove.has(n.id)));
       setNeedsLayout(true);
     } else {
@@ -161,41 +199,30 @@ export function NodeForm({ node, newNodeConfig, edges, setNodes, setEdges, setNe
   };
 
   return (
-    <div
-      style={{
-        position: 'absolute',
-        right: 0,
-        top: 0,
-        width: 400,
-        padding: 20,
-        background: '#fff',
-        border: '1px solid #ddd',
-        borderRadius: 8,
-        boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-        zIndex: 10,
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h3 style={{ fontSize: 18, fontWeight: 'bold', margin: 0 }}>
-          {isNewNode ? 'Configure New If/Else Node' : 'Edit Node'}
+    <div style={styles.form}>
+      <div style={styles.header}>
+        <h3 style={styles.title}>
+          {isNewNode ? 'Configure New If/Else Node' : `Edit ${nodeType === 'action' ? 'Action' : 'If/Else'} Node`}
         </h3>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+        <button onClick={onClose} style={styles.closeButton}>
           <X size={20} />
         </button>
       </div>
-      <div style={{ marginBottom: 20 }}>
-        <label style={{ display: 'block', marginBottom: 5, fontWeight: 'bold' }}>Label:</label>
+      
+      <div style={styles.field}>
+        <label style={styles.label}>Label:</label>
         <input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          style={{ width: '100%', padding: 8, border: '1px solid #ccc', borderRadius: 4, fontSize: 14 }}
+          style={styles.input}
         />
       </div>
+      
       {nodeType === 'ifelse' && (
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', marginBottom: 5, fontWeight: 'bold' }}>Branches:</label>
+        <div style={styles.field}>
+          <label style={styles.label}>Branches:</label>
           {branches.map((branch, index) => (
-            <div key={branch.id} style={{ marginBottom: 10 }}>
+            <div key={branch.id} style={styles.branchItem}>
               <input
                 value={branch.label}
                 onChange={(e) => {
@@ -203,7 +230,7 @@ export function NodeForm({ node, newNodeConfig, edges, setNodes, setEdges, setNe
                   newBranches[index].label = e.target.value;
                   setBranches(newBranches);
                 }}
-                style={{ width: '100%', padding: 8, border: '1px solid #ccc', borderRadius: 4, fontSize: 14 }}
+                style={styles.input}
               />
             </div>
           ))}
@@ -212,7 +239,8 @@ export function NodeForm({ node, newNodeConfig, edges, setNodes, setEdges, setNe
           </Button>
         </div>
       )}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+      
+      <div style={styles.actions}>
         <Button onClick={handleSave} variant="default">
           Save
         </Button>
