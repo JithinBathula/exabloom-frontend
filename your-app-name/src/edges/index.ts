@@ -1,10 +1,5 @@
-import type { Edge, EdgeTypes } from '@xyflow/react';
-import ButtonEdgeDemo from '@/components/ButtonEdgeDemo';
+import { type Edge } from '@xyflow/react';
 
 export const initialEdges: Edge[] = [
-  { id: 'a->d', source: 'a', target: 'd', type: "buttonedge" },
+  { id: 'a->d', source: 'a', target: 'd', type: 'buttonedge' },
 ];
-
-export const edgeTypes = {
-  buttonedge: ButtonEdgeDemo,
-} satisfies EdgeTypes;
