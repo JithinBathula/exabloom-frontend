@@ -1,18 +1,35 @@
 import { useState } from 'react';
-import { type Node } from '@xyflow/react';
+import { type Node, type Edge } from '@xyflow/react';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
 
 interface NodeFormProps {
   node?: Node;
   newNodeConfig?: { type: 'ifelse'; edgeId: string };
+  edges: Edge[];
   setNodes: (updater: (nodes: Node[]) => Node[]) => void;
   setEdges: (updater: (edges: Edge[]) => Edge[]) => void;
+  setNeedsLayout: (value: boolean) => void;
   onClose: () => void;
   onNewNodeSave?: (data: { label: string; branches: { label: string }[] }) => void;
 }
 
-export function NodeForm({ node, newNodeConfig, setNodes, setEdges, onClose, onNewNodeSave }: NodeFormProps) {
+// Helper function to get all downstream nodes using BFS
+const getDownstreamNodes = (startNodeId: string, edges: Edge[]): string[] => {
+  const visited = new Set<string>();
+  const queue = [startNodeId];
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    if (!visited.has(currentId)) {
+      visited.add(currentId);
+      const outgoingEdges = edges.filter((e) => e.source === currentId);
+      outgoingEdges.forEach((e) => queue.push(e.target));
+    }
+  }
+  return Array.from(visited);
+};
+
+export function NodeForm({ node, newNodeConfig, edges, setNodes, setEdges, setNeedsLayout, onClose, onNewNodeSave }: NodeFormProps) {
   const isNewNode = !!newNodeConfig;
   const nodeType = node ? node.type : newNodeConfig?.type;
 
@@ -59,11 +76,74 @@ export function NodeForm({ node, newNodeConfig, setNodes, setEdges, onClose, onN
   };
 
   const handleDelete = () => {
-    if (node) {
+    if (!node) return;
+
+    if (node.type === 'ifelse') {
+      // Step 1: Identify core nodes to remove (If/Else, Branch, Else)
+      const branchIds = node.data.branches.map((b: { id: string }) => b.id);
+      const elseId = node.data.elseId;
+      const nodesToRemove = new Set([node.id, ...branchIds, elseId].filter(Boolean));
+
+      // Step 2: Find the incoming edge to the If/Else node
+      const incomingEdge = edges.find((e) => e.target === node.id);
+      const sourceId = incomingEdge?.source;
+
+      if (!sourceId) {
+        // No incoming edge, just remove the nodes and their edges
+        setNodes((nds) => nds.filter((n) => !nodesToRemove.has(n.id)));
+        setEdges((eds) => eds.filter((e) => !nodesToRemove.has(e.source) && !nodesToRemove.has(e.target)));
+        setNeedsLayout(true);
+        onClose();
+        return;
+      }
+
+      // Step 3: Identify immediate successors of Branch and Else nodes
+      const branchSuccessors = branchIds.map((branchId) => edges.find((e) => e.source === branchId)?.target).filter(Boolean);
+      const elseSuccessor = edges.find((e) => e.source === elseId)?.target;
+      const allSuccessors = [...branchSuccessors, elseSuccessor].filter(Boolean) as string[];
+
+      // Step 4: Check if all successors converge to the same node
+      const uniqueSuccessors = new Set(allSuccessors);
+      let targetId: string;
+
+      if (uniqueSuccessors.size === 1) {
+        // All branches converge to one node, connect source to this node
+        targetId = allSuccessors[0];
+      } else {
+        // Branches go to different nodes or End nodes, create a new End node
+        targetId = `end-${Date.now()}`;
+        const newEndNode: Node = {
+          id: targetId,
+          type: 'end',
+          position: { x: node.position.x, y: node.position.y + 200 },
+          data: { label: 'End' },
+        };
+        setNodes((nds) => [...nds.filter((n) => !nodesToRemove.has(n.id)), newEndNode]);
+      }
+
+      // Step 5: Update edges
+      setEdges((eds) => {
+        // Remove edges connected to nodes being deleted
+        const filteredEdges = eds.filter((e) => !nodesToRemove.has(e.source) && !nodesToRemove.has(e.target));
+        // Add new edge from source to target
+        const newEdge = {
+          id: `${sourceId}-${targetId}-${Date.now()}`,
+          source: sourceId,
+          target: targetId,
+          type: 'buttonedge',
+        };
+        return [...filteredEdges, newEdge];
+      });
+
+      // Step 6: Remove only the If/Else structure, let useEffect handle unreachable nodes
+      setNodes((nds) => nds.filter((n) => !nodesToRemove.has(n.id)));
+      setNeedsLayout(true);
+    } else {
+      // Handle deletion for non-If/Else nodes (e.g., Action nodes)
       setNodes((nds) => nds.filter((n) => n.id !== node.id));
       setEdges((eds) => {
-        const incoming = eds.find((e) => e.target === node.id);
-        const outgoing = eds.find((e) => e.source === node.id);
+        const incoming = edges.find((e) => e.target === node.id);
+        const outgoing = edges.find((e) => e.source === node.id);
         if (incoming && outgoing) {
           const newEdge = {
             id: `${incoming.source}-${outgoing.target}`,
@@ -75,6 +155,7 @@ export function NodeForm({ node, newNodeConfig, setNodes, setEdges, onClose, onN
         }
         return eds.filter((e) => e.source !== node.id && e.target !== node.id);
       });
+      setNeedsLayout(true);
     }
     onClose();
   };
