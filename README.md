@@ -23,8 +23,8 @@ A modern workflow builder application built using React and React Flow. This app
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/yourusername/react-flow-workflow-builder.git
-   cd react-flow-workflow-builder
+   git clone https://github.com/JithinBathula/exabloom-frontend
+   cd exabloom-frontend
    ```
 
 2. Install dependencies:
@@ -123,10 +123,6 @@ src/
 
 - Ensure that each node has the correct Handle components (source/target)
 - Check browser console for any errors
-
-### Layout issues
-
-- If nodes overlap, try adjusting the rankdir, ranksep, and nodesep settings in the useLayoutEngine hook
 
 ## Acknowledgments
 
